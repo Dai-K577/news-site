@@ -2,8 +2,9 @@ name: Daily News Digest
 
 on:
   schedule:
-    # 毎朝7:00 JST = 22:00 UTC (前日)
-    - cron: "0 22 * * *"
+    # 3時間おきに更新 (1:00, 4:00, 7:00, 10:00, 13:00, 16:00, 19:00, 22:00 UTC)
+    # JST換算: 10:00, 13:00, 16:00, 19:00, 22:00, 翌1:00, 翌4:00, 翌7:00
+    - cron: "0 */3 * * *"
   workflow_dispatch:  # 手動実行も可能
 
 permissions:
