@@ -1,0 +1,39 @@
+name: Daily News Digest
+
+on:
+  schedule:
+    # 毎朝7:00 JST = 22:00 UTC (前日)
+    - cron: "0 22 * * *"
+  workflow_dispatch:  # 手動実行も可能
+
+permissions:
+  contents: write  # GitHub Pagesへのpushに必要
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python をセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 依存パッケージをインストール
+        run: pip install -r requirements.txt
+
+      - name: ニュースを生成
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scripts/generate_news.py
+
+      - name: GitHub Pages へコミット & プッシュ
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/index.html
+          git diff --cached --quiet || git commit -m "chore: update news digest $(date +'%Y-%m-%d %H:%M JST' -d '+9 hours')"
+          git push
