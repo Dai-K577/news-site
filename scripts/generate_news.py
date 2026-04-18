@@ -1,7 +1,7 @@
 """
 Daily News Aggregator
 - RSSフィードからニュースを取得
-- Claude APIで日本語要約
+- Gemini APIで日本語要約
 - GitHub Pages用HTMLを生成
 """
 
@@ -9,7 +9,7 @@ import os
 import sys
 import json
 import feedparser
-import anthropic
+import google.generativeai as genai
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -62,9 +62,9 @@ def fetch_articles(category: str, sources: list[tuple]) -> list[dict]:
 
 
 # ─────────────────────────────────────────
-# Claude API で要約
+# Gemini API で要約
 # ─────────────────────────────────────────
-def summarize_category(client: anthropic.Anthropic, category: str, articles: list[dict]) -> str:
+def summarize_category(category: str, articles: list[dict]) -> str:
     if not articles:
         return "本日は記事を取得できませんでした。"
 
@@ -81,12 +81,9 @@ def summarize_category(client: anthropic.Anthropic, category: str, articles: lis
 {articles_text}
 """
 
-    message = client.messages.create(
-        model="claude-opus-4-6",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return message.content[0].text
+    model = genai.GenerativeModel("gemini-2.0-flash")
+    response = model.generate_content(prompt)
+    return response.text
 
 
 # ─────────────────────────────────────────
@@ -216,13 +213,13 @@ def build_html(summaries: dict[str, dict]) -> str:
 <body>
     <header>
         <h1>📰 Daily News Digest</h1>
-        <p>{date_str} &nbsp;|&nbsp; 更新 {time_str} &nbsp;|&nbsp; Claude AI 要約</p>
+        <p>{date_str} &nbsp;|&nbsp; 更新 {time_str} &nbsp;|&nbsp; Gemini AI 要約</p>
     </header>
     <main>
         {sections_html}
     </main>
     <footer>
-        Powered by Claude API &amp; GitHub Actions &nbsp;|&nbsp; 毎朝7時自動更新
+        Powered by Gemini API &amp; GitHub Actions &nbsp;|&nbsp; 3時間おきに自動更新
     </footer>
 </body>
 </html>
@@ -233,20 +230,20 @@ def build_html(summaries: dict[str, dict]) -> str:
 # メイン
 # ─────────────────────────────────────────
 def main():
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        print("ERROR: ANTHROPIC_API_KEY が設定されていません", file=sys.stderr)
+        print("ERROR: GEMINI_API_KEY が設定されていません", file=sys.stderr)
         sys.exit(1)
 
-    client = anthropic.Anthropic(api_key=api_key)
+    genai.configure(api_key=api_key)
 
     print("ニュースを取得中...")
     summaries = {}
     for category, sources in RSS_SOURCES.items():
         print(f"  [{category}] 記事取得中...")
         articles = fetch_articles(category, sources)
-        print(f"  [{category}] {len(articles)}件取得 → Claude で要約中...")
-        summary = summarize_category(client, category, articles)
+        print(f"  [{category}] {len(articles)}件取得 → Gemini で要約中...")
+        summary = summarize_category(category, articles)
         summaries[category] = {"summary": summary, "articles": articles}
 
     print("HTMLを生成中...")
