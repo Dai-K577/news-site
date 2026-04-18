@@ -9,7 +9,7 @@ import os
 import sys
 import json
 import feedparser
-import google.generativeai as genai
+from google import genai
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -64,7 +64,7 @@ def fetch_articles(category: str, sources: list[tuple]) -> list[dict]:
 # ─────────────────────────────────────────
 # Gemini API で要約
 # ─────────────────────────────────────────
-def summarize_category(category: str, articles: list[dict]) -> str:
+def summarize_category(category: str, articles: list[dict], client=None) -> str:
     if not articles:
         return "本日は記事を取得できませんでした。"
 
@@ -81,8 +81,10 @@ def summarize_category(category: str, articles: list[dict]) -> str:
 {articles_text}
 """
 
-    model = genai.GenerativeModel("gemini-2.0-flash")
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt,
+    )
     return response.text
 
 
@@ -235,7 +237,7 @@ def main():
         print("ERROR: GEMINI_API_KEY が設定されていません", file=sys.stderr)
         sys.exit(1)
 
-    genai.configure(api_key=api_key)
+    client = genai.Client(api_key=api_key)
 
     print("ニュースを取得中...")
     summaries = {}
@@ -243,7 +245,7 @@ def main():
         print(f"  [{category}] 記事取得中...")
         articles = fetch_articles(category, sources)
         print(f"  [{category}] {len(articles)}件取得 → Gemini で要約中...")
-        summary = summarize_category(category, articles)
+        summary = summarize_category(category, articles, client)
         summaries[category] = {"summary": summary, "articles": articles}
 
     print("HTMLを生成中...")
