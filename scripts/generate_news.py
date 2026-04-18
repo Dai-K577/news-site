@@ -83,7 +83,7 @@ def summarize_category(category: str, articles: list[dict], client=None) -> str:
 """
 
     response = client.models.generate_content(
-        model="gemini-2.0-flash-lite",
+        model="gemini-2.5-flash",
         contents=prompt,
     )
     return response.text
