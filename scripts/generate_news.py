@@ -8,6 +8,7 @@ Daily News Aggregator
 import os
 import sys
 import json
+import time
 import feedparser
 from google import genai
 from datetime import datetime, timezone, timedelta
@@ -82,7 +83,7 @@ def summarize_category(category: str, articles: list[dict], client=None) -> str:
 """
 
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-1.5-flash",
         contents=prompt,
     )
     return response.text
@@ -241,7 +242,9 @@ def main():
 
     print("ニュースを取得中...")
     summaries = {}
-    for category, sources in RSS_SOURCES.items():
+    for i, (category, sources) in enumerate(RSS_SOURCES.items()):
+        if i > 0:
+            time.sleep(5)  # レート制限回避のため5秒待機
         print(f"  [{category}] 記事取得中...")
         articles = fetch_articles(category, sources)
         print(f"  [{category}] {len(articles)}件取得 → Gemini で要約中...")
