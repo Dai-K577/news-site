@@ -95,16 +95,16 @@ def summarize_category(category: str, articles: list[dict], client=None) -> str:
             )
             return response.text
         except genai_errors.ServerError as e:
-            # 503: サーバー高負荷
-            if e.status_code == 503 and attempt < max_retries - 1:
+            # ServerError は 5xx（503含む）→ 常にリトライ
+            if attempt < max_retries - 1:
                 wait = 2 ** attempt
-                print(f"  [リトライ {attempt+1}/{max_retries}] 503エラー、{wait}秒後に再試行...")
+                print(f"  [リトライ {attempt+1}/{max_retries}] サーバーエラー({e})、{wait}秒後に再試行...")
                 time.sleep(wait)
             else:
                 raise
         except genai_errors.ClientError as e:
             # 429: レート制限超過
-            if e.status_code == 429 and attempt < max_retries - 1:
+            if "429" in str(e) and attempt < max_retries - 1:
                 wait = 2 ** (attempt + 2)  # 4s → 8s → 16s → 32s
                 print(f"  [リトライ {attempt+1}/{max_retries}] 429レート制限、{wait}秒後に再試行...")
                 time.sleep(wait)
