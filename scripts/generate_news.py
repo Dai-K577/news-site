@@ -24,7 +24,6 @@ RSS_SOURCES = {
         ("Reuters Top", "https://feeds.reuters.com/reuters/topNews"),
     ],
     "日本のニュース": [
-        ("NHK国際放送", "https://www3.nhk.or.jp/rss/news/cat0.xml"),
         ("朝日新聞", "https://www.asahi.com/rss/asahi/newsheadlines.rdf"),
     ],
     "テクノロジー": [
@@ -91,7 +90,7 @@ def summarize_category(category: str, articles: list[dict], client=None) -> str:
                 model="gemini-2.5-flash",
                 contents=prompt,
                 config=genai_types.GenerateContentConfig(
-                    max_output_tokens=1024,
+                    max_output_tokens=2048,
                 ),
             )
             return response.text
