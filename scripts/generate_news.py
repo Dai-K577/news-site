@@ -87,7 +87,7 @@ def summarize_category(category: str, articles: list[dict], client=None) -> str:
     for attempt in range(max_retries):
         try:
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-2.0-flash",
                 contents=prompt,
                 config=genai_types.GenerateContentConfig(
                     max_output_tokens=2048,
@@ -103,7 +103,7 @@ def summarize_category(category: str, articles: list[dict], client=None) -> str:
             else:
                 raise
         except genai_errors.ClientError as e:
-            # 429: レート制限超過
+            # 429: レート制限超過（一時的なもののみリトライ）
             if "429" in str(e) and attempt < max_retries - 1:
                 wait = 2 ** (attempt + 2)  # 4s → 8s → 16s → 32s
                 print(f"  [リトライ {attempt+1}/{max_retries}] 429レート制限、{wait}秒後に再試行...")
