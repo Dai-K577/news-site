@@ -2,8 +2,8 @@ name: Daily News Digest
 
 on:
   schedule:
-    # JST 6:00 = UTC 21:00, JST 12:00 = UTC 3:00, JST 17:00 = UTC 8:00
-    - cron: "0 21,3,8 * * *"
+    # JST 6:00 = UTC 21:00, JST 12:00 = UTC 3:00
+    - cron: "0 21,3 * * *"
   workflow_dispatch:  # 手動実行も可能
 
 permissions:
