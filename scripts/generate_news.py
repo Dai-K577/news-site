@@ -87,7 +87,7 @@ def summarize_category(category: str, articles: list[dict], client=None) -> str:
     for attempt in range(max_retries):
         try:
             response = client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-1.5-flash",
                 contents=prompt,
                 config=genai_types.GenerateContentConfig(
                     max_output_tokens=2048,
