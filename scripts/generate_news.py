@@ -22,9 +22,14 @@ RSS_SOURCES = {
     "世界のニュース": [
         ("BBC World", "http://feeds.bbci.co.uk/news/world/rss.xml"),
         ("Reuters Top", "https://feeds.reuters.com/reuters/topNews"),
+        ("Al Jazeera", "https://www.aljazeera.com/xml/rss/all.xml"),
+        ("The Guardian", "https://www.theguardian.com/world/rss"),
+        ("Deutsche Welle", "https://rss.dw.com/rdf/rss-en-all"),
     ],
     "日本のニュース": [
         ("朝日新聞", "https://www.asahi.com/rss/asahi/newsheadlines.rdf"),
+        ("毎日新聞", "https://mainichi.jp/rss/etc/mainichi-flash.rss"),
+        ("Yahoo!ニュース", "https://news.yahoo.co.jp/rss/topics/top-picks.xml"),
     ],
     "テクノロジー": [
         ("TechCrunch", "https://techcrunch.com/feed/"),
