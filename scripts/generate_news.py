@@ -7,10 +7,11 @@ Daily News Aggregator
 
 import os
 import sys
-import json
 import time
 import feedparser
 from google import genai
+from google.genai import errors as genai_errors
+from google.genai import types as genai_types
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -21,10 +22,14 @@ RSS_SOURCES = {
     "世界のニュース": [
         ("BBC World", "http://feeds.bbci.co.uk/news/world/rss.xml"),
         ("Reuters Top", "https://feeds.reuters.com/reuters/topNews"),
+        ("Al Jazeera", "https://www.aljazeera.com/xml/rss/all.xml"),
+        ("The Guardian", "https://www.theguardian.com/world/rss"),
+        ("Deutsche Welle", "https://rss.dw.com/rdf/rss-en-all"),
     ],
     "日本のニュース": [
-        ("NHK国際放送", "https://www3.nhk.or.jp/rss/news/cat0.xml"),
         ("朝日新聞", "https://www.asahi.com/rss/asahi/newsheadlines.rdf"),
+        ("Yahoo!ニュース", "https://news.yahoo.co.jp/rss/topics/top-picks.xml"),
+        ("livedoor NEWS", "https://news.livedoor.com/topics/rss/top.xml"),
     ],
     "テクノロジー": [
         ("TechCrunch", "https://techcrunch.com/feed/"),
@@ -36,8 +41,9 @@ RSS_SOURCES = {
     ],
 }
 
-MAX_ARTICLES_PER_SOURCE = 5   # 1ソースあたりの最大記事数
-MAX_ARTICLES_PER_CATEGORY = 8 # 1カテゴリあたりの最大記事数(要約用)
+MAX_ARTICLES_PER_SOURCE = 3
+MAX_ARTICLES_PER_CATEGORY = 15
+MAX_SUMMARY_CHARS = 300
 JST = timezone(timedelta(hours=9))
 
 
@@ -53,7 +59,7 @@ def fetch_articles(category: str, sources: list[tuple]) -> list[dict]:
                 articles.append({
                     "source": source_name,
                     "title": entry.get("title", ""),
-                    "summary": entry.get("summary", entry.get("description", ""))[:300],
+                    "summary": entry.get("summary", entry.get("description", ""))[:MAX_SUMMARY_CHARS],
                     "link": entry.get("link", ""),
                     "published": entry.get("published", ""),
                 })
@@ -63,7 +69,7 @@ def fetch_articles(category: str, sources: list[tuple]) -> list[dict]:
 
 
 # ─────────────────────────────────────────
-# Gemini API で要約（リトライあり）
+# Gemini API で要約
 # ─────────────────────────────────────────
 def summarize_category(category: str, articles: list[dict], client=None) -> str:
     if not articles:
@@ -82,22 +88,38 @@ def summarize_category(category: str, articles: list[dict], client=None) -> str:
 {articles_text}
 """
 
-    max_retries = 5
+    max_retries = 8
     for attempt in range(max_retries):
         try:
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=prompt,
+                config=genai_types.GenerateContentConfig(
+                    max_output_tokens=2048,
+                ),
             )
             return response.text
-        except Exception as e:
+        except genai_errors.ServerError as e:
+            # ServerError は 5xx（503含む）→ 常にリトライ（最大約8分待機）
             if attempt < max_retries - 1:
-                wait = 30 * (attempt + 1)  # 30秒、60秒、90秒…と待機
-                print(f"  [WARN] {category} 要約失敗（{attempt + 1}回目）: {e} → {wait}秒後リトライ")
+                wait = min(2 ** attempt, 60)  # 1,2,4,8,16,32,60,60秒
+                print(f"  [リトライ {attempt+1}/{max_retries}] サーバーエラー、{wait}秒後に再試行...")
                 time.sleep(wait)
             else:
-                print(f"  [ERROR] {category} 要約を{max_retries}回試みましたが失敗しました: {e}")
-                return "一時的なエラーにより要約を取得できませんでした。"
+                raise
+        except genai_errors.ClientError as e:
+            err_str = str(e)
+            # 日次クォータ超過はリトライしても無意味なので即失敗
+            if "PerDay" in err_str or "per_day" in err_str.lower():
+                print(f"  [クォータ超過] 本日の上限に達しました。処理を中断します。")
+                raise
+            # 分単位のレート制限のみリトライ
+            if "429" in err_str and attempt < max_retries - 1:
+                wait = 2 ** (attempt + 2)  # 4s → 8s → 16s → 32s
+                print(f"  [リトライ {attempt+1}/{max_retries}] 429レート制限、{wait}秒後に再試行...")
+                time.sleep(wait)
+            else:
+                raise
 
 
 # ─────────────────────────────────────────
@@ -255,7 +277,7 @@ def main():
     summaries = {}
     for i, (category, sources) in enumerate(RSS_SOURCES.items()):
         if i > 0:
-            time.sleep(5)  # レート制限回避のため5秒待機
+            time.sleep(5)
         print(f"  [{category}] 記事取得中...")
         articles = fetch_articles(category, sources)
         print(f"  [{category}] {len(articles)}件取得 → Gemini で要約中...")
