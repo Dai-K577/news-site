@@ -63,7 +63,7 @@ def fetch_articles(category: str, sources: list[tuple]) -> list[dict]:
 
 
 # ─────────────────────────────────────────
-# Gemini API で要約
+# Gemini API で要約（リトライあり）
 # ─────────────────────────────────────────
 def summarize_category(category: str, articles: list[dict], client=None) -> str:
     if not articles:
@@ -82,11 +82,22 @@ def summarize_category(category: str, articles: list[dict], client=None) -> str:
 {articles_text}
 """
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-    )
-    return response.text
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+            )
+            return response.text
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait = 30 * (attempt + 1)  # 30秒、60秒、90秒…と待機
+                print(f"  [WARN] {category} 要約失敗（{attempt + 1}回目）: {e} → {wait}秒後リトライ")
+                time.sleep(wait)
+            else:
+                print(f"  [ERROR] {category} 要約を{max_retries}回試みましたが失敗しました: {e}")
+                return "一時的なエラーにより要約を取得できませんでした。"
 
 
 # ─────────────────────────────────────────
