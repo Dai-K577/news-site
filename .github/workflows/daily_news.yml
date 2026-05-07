@@ -4,8 +4,8 @@ on:
   schedule:
     # JST 09:30 = UTC 00:30（クォータリセット後30分バッファ）
     - cron: "30 0 * * *"
-    # JST 18:00 = UTC 09:00
-    - cron: "0 9 * * *"
+    # JST 15:00 = UTC 06:00
+    - cron: "0 6 * * *"
   workflow_dispatch:  # 手動実行も可能
 
 permissions:
