@@ -88,7 +88,7 @@ def summarize_category(category: str, articles: list[dict], client=None) -> str:
 {articles_text}
 """
 
-    max_retries = 8
+    max_retries = 2
     for attempt in range(max_retries):
         try:
             response = client.models.generate_content(
@@ -100,11 +100,10 @@ def summarize_category(category: str, articles: list[dict], client=None) -> str:
             )
             return response.text
         except genai_errors.ServerError as e:
-            # ServerError は 5xx（503含む）→ 常にリトライ（最大約8分待機）
+            # 503: 1回のみリトライ（クォータ節約のため）
             if attempt < max_retries - 1:
-                wait = min(2 ** attempt, 60)  # 1,2,4,8,16,32,60,60秒
-                print(f"  [リトライ {attempt+1}/{max_retries}] サーバーエラー、{wait}秒後に再試行...")
-                time.sleep(wait)
+                print(f"  [リトライ 1/1] サーバーエラー、30秒後に再試行...")
+                time.sleep(30)
             else:
                 raise
         except genai_errors.ClientError as e:
