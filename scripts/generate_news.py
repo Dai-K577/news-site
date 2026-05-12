@@ -27,7 +27,6 @@ RSS_SOURCES = {
         ("Deutsche Welle", "https://rss.dw.com/rdf/rss-en-all"),
     ],
     "日本のニュース": [
-        ("朝日新聞", "https://www.asahi.com/rss/asahi/newsheadlines.rdf"),
         ("Yahoo!ニュース", "https://news.yahoo.co.jp/rss/topics/top-picks.xml"),
         ("livedoor NEWS", "https://news.livedoor.com/topics/rss/top.xml"),
     ],
