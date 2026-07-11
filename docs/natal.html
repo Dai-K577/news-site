@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#141428">
+<title>星読み — 出生図の位置関係解析</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --page-bg1: #1a1a2e;
+    --page-bg2: #16213e;
+    --surface: #141428;
+    --card: rgba(255,255,255,0.055);
+    --card-border: rgba(255,255,255,0.10);
+    --ink: #f2f2f7;
+    --ink-2: #b9b9d0;
+    --ink-muted: #8a8aa8;
+    --hairline: rgba(255,255,255,0.14);
+    --gold: #e8c56a;
+    /* エレメント色(ダークサーフェス検証済み) */
+    --el-fire:  #e66767;
+    --el-earth: #c98500;
+    --el-air:   #3987e5;
+    --el-water: #199e70;
+    --harmony: #3987e5;
+    --tension: #e66767;
+  }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: system-ui, -apple-system, 'Hiragino Kaku Gothic ProN', sans-serif;
+    background: linear-gradient(160deg, var(--page-bg1) 0%, var(--page-bg2) 100%) fixed;
+    color: var(--ink);
+    line-height: 1.7;
+    min-height: 100vh;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  header {
+    text-align: center;
+    padding: calc(1.6rem + env(safe-area-inset-top)) 1rem 0.4rem;
+  }
+  header h1 { font-size: 1.35rem; letter-spacing: 0.05em; }
+  header p { color: var(--ink-2); font-size: 0.82rem; margin-top: 0.2rem; }
+  main {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 0.8rem 0.9rem 2rem;
+    display: grid;
+    gap: 0.9rem;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 1rem 1.05rem;
+    backdrop-filter: blur(6px);
+  }
+  .card h2 {
+    font-size: 0.95rem;
+    color: var(--gold);
+    letter-spacing: 0.08em;
+    margin-bottom: 0.6rem;
+    font-weight: 600;
+  }
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+  .controls label {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--ink-muted);
+    margin-bottom: 0.15rem;
+  }
+  .controls input {
+    width: 100%;
+    font: inherit;
+    font-size: 0.95rem;
+    color: var(--ink);
+    background: rgba(0,0,0,0.28);
+    border: 1px solid var(--hairline);
+    border-radius: 9px;
+    padding: 0.5rem 0.6rem;
+    color-scheme: dark;
+    min-height: 44px;
+  }
+  .hint { font-size: 0.74rem; color: var(--ink-muted); margin-top: 0.5rem; }
+  .placeholder { text-align: center; color: var(--ink-muted); font-size: 0.9rem; padding: 1.5rem 0; }
+  .wheel-wrap { display: flex; justify-content: center; }
+  svg.wheel { width: 100%; max-width: 430px; height: auto; display: block; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th {
+    text-align: left;
+    color: var(--ink-muted);
+    font-weight: 500;
+    font-size: 0.72rem;
+    padding: 0.15rem 0.3rem;
+    border-bottom: 1px solid var(--hairline);
+  }
+  td { padding: 0.34rem 0.3rem; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  tr:last-child td { border-bottom: none; }
+  .num { font-variant-numeric: tabular-nums; }
+  .glyph { font-size: 1.05rem; width: 1.6rem; }
+  .retro { color: var(--tension); font-size: 0.78rem; font-weight: 600; }
+  .nature {
+    display: inline-block;
+    font-size: 0.7rem;
+    border-radius: 5px;
+    padding: 0 0.4rem;
+    border: 1px solid;
+    white-space: nowrap;
+  }
+  .nature.harmony  { color: #7db4f0; border-color: rgba(57,135,229,0.5); }
+  .nature.tension  { color: #f09a9a; border-color: rgba(230,103,103,0.5); }
+  .nature.emphasis { color: #e3b055; border-color: rgba(201,133,0,0.55); }
+  .commentary li { margin: 0.45rem 0 0.45rem 1.1rem; font-size: 0.88rem; color: var(--ink-2); }
+  .commentary li::marker { color: var(--gold); }
+  .config {
+    border-left: 3px solid var(--gold);
+    padding: 0.3rem 0 0.3rem 0.7rem;
+    margin: 0.55rem 0;
+  }
+  .config .name { font-size: 0.9rem; font-weight: 600; color: var(--gold); }
+  .config .members { font-size: 0.82rem; color: var(--ink); margin: 0.1rem 0; }
+  .config .desc { font-size: 0.84rem; color: var(--ink-2); }
+  .bars { display: grid; gap: 0.35rem; margin-top: 0.3rem; }
+  .bar-row { display: grid; grid-template-columns: 3.2rem 1fr 1.4rem; align-items: center; gap: 0.5rem; font-size: 0.8rem; }
+  .bar-track { background: rgba(0,0,0,0.3); border-radius: 4px; height: 0.55rem; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; }
+  footer {
+    text-align: center; padding: 0 1rem 2.5rem;
+    font-size: 0.72rem; color: var(--ink-muted);
+  }
+  footer a { color: var(--ink-2); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🌠 星読み — 出生図の位置関係解析</h1>
+  <p>生まれた瞬間の天体の位置関係(アスペクト)から資質を読む — 計算はすべて端末内で完結</p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>あなたの出生情報</h2>
+    <div class="controls">
+      <div>
+        <label for="b-date">生年月日</label>
+        <input type="date" id="b-date" min="1800-01-01" max="2050-12-31">
+      </div>
+      <div>
+        <label for="b-time">出生時刻(わかれば)</label>
+        <input type="time" id="b-time">
+      </div>
+    </div>
+    <p class="hint">出生時刻が不明な場合は空欄のまま(正午で計算)。その場合、月の位置に最大±7°程度の幅があります。入力内容はこの端末のみに保存され、トランジットページと共有されます。</p>
+  </section>
+
+  <div id="results" hidden><div style="display:contents">
+    <section class="card">
+      <h2>出生図(ネイタルチャート)</h2>
+      <div class="wheel-wrap" id="wheel"></div>
+    </section>
+
+    <section class="card">
+      <h2>天体位置</h2>
+      <table id="positions">
+        <thead><tr><th></th><th>天体</th><th>星座</th><th>度数</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>位置関係(アスペクト)一覧</h2>
+      <table id="aspects">
+        <thead><tr><th>天体</th><th>アスペクト</th><th>オーブ</th><th>性質</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>特別な配置</h2>
+      <div id="configs"></div>
+    </section>
+
+    <section class="card">
+      <h2>バランス分析</h2>
+      <div id="balance"></div>
+    </section>
+
+    <section class="card">
+      <h2>性格・資質の考察</h2>
+      <ul class="commentary" id="commentary"></ul>
+    </section>
+  </div></div>
+
+  <section class="card" id="placeholder">
+    <p class="placeholder">生年月日を入力すると、出生図の位置関係を解析します</p>
+  </section>
+</main>
+
+<footer>
+  <p>惑星: JPL近似ケプラー軌道要素(1800–2050年) / 月: Schlyter法(摂動12項)。</p>
+  <p style="margin-top:0.4rem">
+    <a href="./astrology.html">今日の星回り →</a> &nbsp;|&nbsp;
+    <a href="./transit.html">出生図×現在の空 →</a>
+  </p>
+</footer>
+
+<script>
+/* ============================================================
+   天文計算部 (scripts/astrology.py と同一ロジックのJS移植)
+   ============================================================ */
+const ASTRO = (() => {
+  const DEG = Math.PI / 180;
+  const mod = (a, n) => ((a % n) + n) % n;
+  const julianDay = (ms) => ms / 86400000 + 2440587.5;
+
+  // 惑星の軌道要素 (JPL近似暦: J2000黄道基準, 1800-2050年)
+  const ELEMENTS = {
+    "水星": [0.38709927,0.00000037, 0.20563593,0.00001906, 7.00497902,-0.00594749,
+             252.25032350,149472.67411175, 77.45779628,0.16047689, 48.33076593,-0.12534081],
+    "金星": [0.72333566,0.00000390, 0.00677672,-0.00004107, 3.39467605,-0.00078890,
+             181.97909950,58517.81538729, 131.60246718,0.00268329, 76.67984255,-0.27769418],
+    "地球": [1.00000261,0.00000562, 0.01671123,-0.00004392, -0.00001531,-0.01294668,
+             100.46457166,35999.37244981, 102.93768193,0.32327364, 0.0,0.0],
+    "火星": [1.52371034,0.00001847, 0.09339410,0.00007882, 1.84969142,-0.00813131,
+             -4.55343205,19140.30268499, -23.94362959,0.44441088, 49.55953891,-0.29257343],
+    "木星": [5.20288700,-0.00011607, 0.04838624,-0.00013253, 1.30439695,-0.00183714,
+             34.39644051,3034.74612775, 14.72847983,0.21252668, 100.47390909,0.20469106],
+    "土星": [9.53667594,-0.00125060, 0.05386179,-0.00050991, 2.48599187,0.00193609,
+             49.95424423,1222.49362201, 92.59887831,-0.41897216, 113.66242448,-0.28867794],
+    "天王星": [19.18916464,-0.00196176, 0.04725744,-0.00004397, 0.77263783,-0.00242939,
+             313.23810451,428.48202785, 170.95427630,0.40805281, 74.01692503,0.04240589],
+    "海王星": [30.06992276,0.00026291, 0.00859048,0.00005105, 1.77004347,0.00035372,
+             -55.12002969,218.45945325, 44.96476227,-0.32241464, 131.78422574,-0.00508664],
+    "冥王星": [39.48211675,-0.00031596, 0.24882730,0.00005170, 17.14001206,0.00004818,
+             238.92903833,145.20780515, 224.06891629,-0.04062942, 110.30393684,-0.01183482],
+  };
+
+  function solveKepler(M, e) {
+    let E = M + e * Math.sin(M);
+    for (let i = 0; i < 20; i++) {
+      const dE = (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+      E -= dE;
+      if (Math.abs(dE) < 1e-12) break;
+    }
+    return E;
+  }
+
+  function helioXYZ(name, T) {
+    const el = ELEMENTS[name];
+    const a = el[0] + el[1] * T, e = el[2] + el[3] * T;
+    const inc = (el[4] + el[5] * T) * DEG;
+    const L = el[6] + el[7] * T, varpi = el[8] + el[9] * T;
+    const Omega = (el[10] + el[11] * T) * DEG;
+    const M = mod(L - varpi, 360) * DEG;
+    const omega = varpi * DEG - Omega;
+    const E = solveKepler(M, e);
+    const xp = a * (Math.cos(E) - e);
+    const yp = a * Math.sqrt(1 - e * e) * Math.sin(E);
+    const cw = Math.cos(omega), sw = Math.sin(omega);
+    const cO = Math.cos(Omega), sO = Math.sin(Omega);
+    const ci = Math.cos(inc), si = Math.sin(inc);
+    return [
+      (cw*cO - sw*sO*ci)*xp + (-sw*cO - cw*sO*ci)*yp,
+      (cw*sO + sw*cO*ci)*xp + (-sw*sO + cw*cO*ci)*yp,
+      (sw*si)*xp + (cw*si)*yp,
+    ];
+  }
+
+  const precession = (T) => 1.396971 * T + 0.0003086 * T * T;
+
+  function planetLongitude(name, jd) {
+    const T = (jd - 2451545.0) / 36525.0;
+    const [ex, ey] = helioXYZ("地球", T);
+    let gx, gy;
+    if (name === "太陽") { gx = -ex; gy = -ey; }
+    else {
+      const [px, py] = helioXYZ(name, T);
+      gx = px - ex; gy = py - ey;
+    }
+    return mod(Math.atan2(gy, gx) / DEG + precession(T), 360);
+  }
+
+  function moonLongitude(jd) {
+    const d = jd - 2451543.5;
+    const N = 125.1228 - 0.0529538083 * d;
+    const w = 318.0634 + 0.1643573223 * d;
+    const e = 0.054900;
+    const M = 115.3654 + 13.0649929509 * d;
+    const Ms = 356.0470 + 0.9856002585 * d;
+    const ws = 282.9404 + 4.70935e-5 * d;
+    const Ls = Ms + ws;
+    const E = solveKepler(mod(M, 360) * DEG, e);
+    const xp = Math.cos(E) - e;
+    const yp = Math.sqrt(1 - e * e) * Math.sin(E);
+    const v = Math.atan2(yp, xp) / DEG;
+    let lon = mod(N + w + v, 360);
+    const Lm = mod(N + w + M, 360);
+    const D = (Lm - Ls) * DEG, F = (Lm - N) * DEG;
+    const Mr = M * DEG, Msr = Ms * DEG;
+    lon += -1.274*Math.sin(Mr - 2*D) + 0.658*Math.sin(2*D) - 0.186*Math.sin(Msr)
+         - 0.059*Math.sin(2*Mr - 2*D) - 0.057*Math.sin(Mr - 2*D + Msr)
+         + 0.053*Math.sin(Mr + 2*D) + 0.046*Math.sin(2*D - Msr)
+         + 0.041*Math.sin(Mr - Msr) - 0.035*Math.sin(D) - 0.031*Math.sin(Mr + Msr)
+         - 0.015*Math.sin(2*F - 2*D) + 0.011*Math.sin(Mr - 4*D);
+    return mod(lon, 360);
+  }
+
+  const BODIES = ["太陽","月","水星","金星","火星","木星","土星","天王星","海王星","冥王星"];
+  const GLYPHS = {"太陽":"☉","月":"☽","水星":"☿","金星":"♀","火星":"♂",
+                  "木星":"♃","土星":"♄","天王星":"♅","海王星":"♆","冥王星":"♇"};
+  const SIGNS = ["牡羊座","牡牛座","双子座","蟹座","獅子座","乙女座",
+                 "天秤座","蠍座","射手座","山羊座","水瓶座","魚座"];
+  const SIGN_GLYPHS = ["♈","♉","♊","♋","♌","♍","♎","♏","♐","♑","♒","♓"];
+  const SIGN_MEANINGS = {
+    "牡羊座":"開拓・スタート・勢い","牡牛座":"安定・所有・五感",
+    "双子座":"情報・コミュニケーション・好奇心","蟹座":"感情・家庭・共感",
+    "獅子座":"自己表現・創造・情熱","乙女座":"分析・実務・調整",
+    "天秤座":"調和・対人関係・バランス","蠍座":"深化・変容・集中",
+    "射手座":"拡大・探求・楽観","山羊座":"達成・組織・責任",
+    "水瓶座":"革新・独立・ネットワーク","魚座":"直感・共感・想像力",
+  };
+
+  const bodyLongitude = (name, jd) =>
+    name === "月" ? moonLongitude(jd) : planetLongitude(name, jd);
+  const angleDiff = (a, b) => mod(a - b + 180, 360) - 180;
+  const bodySpeed = (name, jd) =>
+    angleDiff(bodyLongitude(name, jd + 0.5), bodyLongitude(name, jd - 0.5));
+  const signIndex = (lon) => Math.floor(mod(lon, 360) / 30);
+
+  function fmtDeg(degInSign) {
+    let d = Math.floor(degInSign);
+    let m = Math.round((degInSign - d) * 60);
+    if (m === 60) { d += 1; m = 0; }
+    return `${d}°${String(m).padStart(2, "0")}′`;
+  }
+
+  function computePositions(jd) {
+    const positions = {};
+    for (const name of BODIES) {
+      const lon = bodyLongitude(name, jd);
+      const speed = bodySpeed(name, jd);
+      const si = signIndex(lon);
+      positions[name] = {
+        longitude: lon, sign: SIGNS[si], signIndex: si,
+        degree: mod(lon, 30), speed,
+        retrograde: speed < 0 && name !== "太陽" && name !== "月",
+      };
+    }
+    return positions;
+  }
+
+  return { julianDay, computePositions, fmtDeg,
+           BODIES, GLYPHS, SIGNS, SIGN_GLYPHS, SIGN_MEANINGS,
+           angleDiff, signIndex, mod };
+})();
+
+/* ============================================================
+   出生図の位置関係(アスペクト)解析部
+   ============================================================ */
+const NATAL = (() => {
+  // [角度, 名称, 記号, オーブ, 性質] — ネイタルは標準オーブ
+  const ASPECT_DEFS = [
+    [0,   "コンジャンクション(合)", "☌", 8.0, "強調"],
+    [60,  "セクスタイル",           "⚹", 5.0, "調和"],
+    [90,  "スクエア",               "□", 7.0, "緊張"],
+    [120, "トライン",               "△", 7.0, "調和"],
+    [180, "オポジション(衝)",       "☍", 8.0, "緊張"],
+  ];
+  // 各天体が表す生まれ持った資質
+  const TRAIT = {
+    "太陽":"基本的な生き方・意志","月":"感情と安心の求め方","水星":"考え方・伝え方",
+    "金星":"愛し方・楽しみ方","火星":"頑張り方・攻め方","木星":"広げ方・幸運の掴み方",
+    "土星":"慎重さ・責任の負い方","天王星":"個性・自由への欲求",
+    "海王星":"感受性・理想の描き方","冥王星":"執念・変容の力",
+  };
+  const NATAL_EFFECT = {
+    "調和":"互いに自然に協調し、無理なく活かせる持ち味です",
+    "緊張":"内面で引っ張り合いますが、乗り越えるほどに大きな強みへ変わります",
+    "強調":"一体となって強く現れる、あなたの核になる資質です",
+  };
+  const ELEMENTS_JA = ["火","地","風","水"];
+  const ELEMENT_TEXT = {
+    "火":"直感と情熱で動くタイプ。チャレンジ精神が持ち味",
+    "地":"現実感覚に優れた堅実タイプ。着実な積み上げが得意",
+    "風":"知性と言葉の人。情報とつながりを操るのが得意",
+    "水":"共感と感受性の人。人の気持ちを汲む力が持ち味",
+  };
+  const QUALITIES_JA = ["活動","不動","柔軟"];
+  const QUALITY_TEXT = {
+    "活動":"自ら動いて物事を始める推進力",
+    "不動":"一度決めたことを貫く持続力",
+    "柔軟":"状況に合わせて変わり身できる適応力",
+  };
+
+  // アスペクト一覧
+  function aspects(pos) {
+    const out = [];
+    const B = ASTRO.BODIES;
+    for (let i = 0; i < B.length; i++) {
+      for (let j = i + 1; j < B.length; j++) {
+        const sep = Math.abs(ASTRO.angleDiff(pos[B[i]].longitude, pos[B[j]].longitude));
+        for (const [angle, aname, sym, orb, nature] of ASPECT_DEFS) {
+          if (Math.abs(sep - angle) <= orb) {
+            out.push({ body1: B[i], body2: B[j], aspect: aname, symbol: sym,
+                       angle, orb: Math.abs(sep - angle), nature });
+            break;
+          }
+        }
+      }
+    }
+    out.sort((a, b) => a.orb - b.orb);
+    return out;
+  }
+
+  // 特別な配置(複合アスペクト)の検出
+  function configurations(pos, asp) {
+    const B = ASTRO.BODIES;
+    const has = {};
+    for (const a of asp) {
+      has[a.body1 + "|" + a.body2] = a.angle;
+      has[a.body2 + "|" + a.body1] = a.angle;
+    }
+    const rel = (a, b) => has[a + "|" + b];
+    const found = [];
+
+    // グランドクロス: 4天体 = 2組のオポジション + 4つのスクエア
+    const crossMembers = new Set();
+    for (let i = 0; i < B.length; i++)
+      for (let j = i + 1; j < B.length; j++)
+        for (let k = j + 1; k < B.length; k++)
+          for (let l = k + 1; l < B.length; l++) {
+            const q = [B[i], B[j], B[k], B[l]];
+            const pairs = [];
+            for (let x = 0; x < 4; x++)
+              for (let y = x + 1; y < 4; y++) pairs.push(rel(q[x], q[y]));
+            const opp = pairs.filter((p) => p === 180).length;
+            const sq = pairs.filter((p) => p === 90).length;
+            if (opp === 2 && sq === 4) {
+              found.push({ name: "グランドクロス", members: q,
+                desc: "4方向の緊張が拮抗する非常に稀な配置。多方面から鍛えられ、並外れた粘り強さと突破力を育てます。" });
+              q.forEach((m) => crossMembers.add(m));
+            }
+          }
+
+    // Tスクエア: オポジションの2天体の両方にスクエアの頂点天体
+    for (const a of asp.filter((x) => x.angle === 180)) {
+      for (const apex of B) {
+        if (apex === a.body1 || apex === a.body2) continue;
+        if (rel(apex, a.body1) === 90 && rel(apex, a.body2) === 90) {
+          const q = [a.body1, a.body2, apex];
+          if (q.every((m) => crossMembers.has(m))) continue; // グランドクロスの一部は除外
+          found.push({ name: "Tスクエア", members: q,
+            desc: `2つの緊張が${apex}に集中する配置。${apex}(${TRAIT[apex]})が人生の原動力・突破口になります。` });
+        }
+      }
+    }
+
+    // グランドトライン: 3天体が互いにトライン
+    for (let i = 0; i < B.length; i++)
+      for (let j = i + 1; j < B.length; j++)
+        for (let k = j + 1; k < B.length; k++) {
+          const q = [B[i], B[j], B[k]];
+          if (rel(q[0], q[1]) === 120 && rel(q[1], q[2]) === 120 && rel(q[0], q[2]) === 120) {
+            const els = q.map((m) => pos[m].signIndex % 4);
+            const sameEl = els.every((e) => e === els[0]);
+            const elName = sameEl ? `${ELEMENTS_JA[els[0]]}の` : "";
+            found.push({ name: `${elName}グランドトライン`, members: q,
+              desc: "3天体が正三角形を描く大調和の配置。恵まれた才能が自然に流れます。本人には当たり前すぎて自覚しにくいのが唯一の注意点です。" });
+          }
+        }
+
+    // ステリウム: 同じ星座に3天体以上
+    const bySign = {};
+    for (const b of B) (bySign[pos[b].sign] ??= []).push(b);
+    for (const [sign, members] of Object.entries(bySign)) {
+      if (members.length >= 3) {
+        found.push({ name: `${sign}のステリウム`, members,
+          desc: `${sign}に${members.length}天体が集中。「${ASTRO.SIGN_MEANINGS[sign]}」のテーマが人生で強く際立ちます。` });
+      }
+    }
+    return found;
+  }
+
+  // エレメント・三区分の集計
+  function balance(pos) {
+    const el = { "火": 0, "地": 0, "風": 0, "水": 0 };
+    const qu = { "活動": 0, "不動": 0, "柔軟": 0 };
+    for (const b of ASTRO.BODIES) {
+      el[ELEMENTS_JA[pos[b].signIndex % 4]] += 1;
+      qu[QUALITIES_JA[pos[b].signIndex % 3]] += 1;
+    }
+    return { el, qu };
+  }
+
+  // 性格・資質の考察
+  function commentary(pos, asp, configs) {
+    const lines = [];
+    const sun = pos["太陽"], moon = pos["月"];
+    lines.push(`太陽は${sun.sign}(${ASTRO.SIGN_MEANINGS[sun.sign]})、月は${moon.sign}(${ASTRO.SIGN_MEANINGS[moon.sign]})。表の顔は${sun.sign}的に、素の感情は${moon.sign}的に働きます。`);
+
+    const sunMoon = asp.find((a) =>
+      (a.body1 === "太陽" && a.body2 === "月") || (a.body1 === "月" && a.body2 === "太陽"));
+    if (sunMoon) {
+      if (sunMoon.nature === "調和") {
+        lines.push(`太陽と月が${sunMoon.aspect}: 意志と感情が同じ方向を向き、自分の望みに素直に生きられる配置です。`);
+      } else if (sunMoon.nature === "緊張") {
+        lines.push(`太陽と月が${sunMoon.aspect}: やりたいことと気持ちが引っ張り合う配置。この内なる葛藤こそが、深みと成長のバネになります。`);
+      } else {
+        lines.push(`太陽と月が${sunMoon.aspect}: 意志と感情が一体化した新月生まれ的な配置。思い立ったら一直線の集中力があります。`);
+      }
+    }
+
+    const { el, qu } = balance(pos);
+    const domEl = Object.keys(el).reduce((a, b) => (el[b] > el[a] ? b : a));
+    const domQu = Object.keys(qu).reduce((a, b) => (qu[b] > qu[a] ? b : a));
+    lines.push(`エレメントは「${domEl}」が優勢 — ${ELEMENT_TEXT[domEl]}。行動様式は「${domQu}宮」が優勢 — ${QUALITY_TEXT[domQu]}が備わっています。`);
+    const zeroEl = Object.keys(el).filter((k) => el[k] === 0);
+    if (zeroEl.length) {
+      lines.push(`「${zeroEl.join("・")}」のエレメントを持つ天体がありません。この領域は意識して補うことでバランスが取れます。`);
+    }
+
+    for (const a of asp.filter((x) => x.orb <= 3 && !(x.body1 === "太陽" && x.body2 === "月")).slice(0, 6)) {
+      lines.push(`${a.body1} ${a.symbol} ${a.body2}(${a.aspect}, オーブ${a.orb.toFixed(1)}°): ${TRAIT[a.body1]}と${TRAIT[a.body2]}が${NATAL_EFFECT[a.nature]}。`);
+    }
+
+    const retro = ASTRO.BODIES.filter((b) => pos[b].retrograde);
+    if (retro.length) {
+      lines.push(`出生時に逆行していた天体: ${retro.join("、")}。逆行天体の資質(${retro.map((r) => TRAIT[r]).join("、")})は外へ向かうより内側で熟成し、年齢とともに開花する傾向があります。`);
+    }
+
+    if (!configs.length) {
+      lines.push("グランドトライン等の特別な複合配置はありません。個々のアスペクトが素直に働く、癖のない出生図です。");
+    }
+    return lines;
+  }
+
+  return { aspects, configurations, balance, commentary, ASPECT_DEFS,
+           ELEMENTS_JA, QUALITIES_JA };
+})();
+
+/* ============================================================
+   UI 描画部
+   ============================================================ */
+(() => {
+  if (typeof document === "undefined") return; // 計算部の単体テスト用ガード
+  const $ = (id) => document.getElementById(id);
+  const ELEMENT_COLORS = ["var(--el-fire)", "var(--el-earth)", "var(--el-air)", "var(--el-water)"];
+  const EL_COLOR_MAP = { "火": "var(--el-fire)", "地": "var(--el-earth)",
+                         "風": "var(--el-air)", "水": "var(--el-water)" };
+  const NATURE_CLASS = { "調和": "harmony", "緊張": "tension", "強調": "emphasis" };
+  const svgNS = "http://www.w3.org/2000/svg";
+
+  const pt = (lonDeg, r) => {
+    const th = (180 + lonDeg) * Math.PI / 180;
+    return [200 + r * Math.cos(th), 200 - r * Math.sin(th)];
+  };
+
+  function el(name, attrs, text) {
+    const e = document.createElementNS(svgNS, name);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  // グリフ表示角の決定(1次元ラベル配置)
+  function spreadAngles(lons, minSep) {
+    const n = lons.length;
+    const order = lons.map((lon, i) => ({ lon, i })).sort((a, b) => a.lon - b.lon);
+    let cut = 0, maxGap = -1;
+    for (let k = 0; k < n; k++) {
+      const gap = ASTRO.mod(order[(k + 1) % n].lon - order[k].lon, 360);
+      if (gap > maxGap) { maxGap = gap; cut = (k + 1) % n; }
+    }
+    let offset = 0, prevV = -Infinity;
+    const pts = [];
+    for (let k = 0; k < n; k++) {
+      const o = order[(cut + k) % n];
+      let v = o.lon + offset;
+      if (v < prevV) { offset += 360; v += 360; }
+      prevV = v;
+      pts.push({ i: o.i, v });
+    }
+    const clusters = [];
+    for (const p of pts) {
+      let c = { sum: p.v, items: [p.i] };
+      while (clusters.length) {
+        const prev = clusters[clusters.length - 1];
+        const prevEnd = prev.sum / prev.items.length + (prev.items.length - 1) * minSep / 2;
+        const curStart = c.sum / c.items.length - (c.items.length - 1) * minSep / 2;
+        if (curStart - prevEnd < minSep) {
+          c = { sum: prev.sum + c.sum, items: prev.items.concat(c.items) };
+          clusters.pop();
+        } else break;
+      }
+      clusters.push(c);
+    }
+    const out = new Array(n);
+    for (const c of clusters) {
+      const start = c.sum / c.items.length - (c.items.length - 1) * minSep / 2;
+      c.items.forEach((idx, k) => { out[idx] = ASTRO.mod(start + k * minSep, 360); });
+    }
+    return out;
+  }
+
+  function drawWheel(pos, asp) {
+    const svg = el("svg", { viewBox: "0 0 400 400", class: "wheel",
+                            role: "img", "aria-label": "出生図ホイール" });
+    svg.appendChild(el("circle", { cx: 200, cy: 200, r: 196, fill: "#141428",
+                                   stroke: "rgba(255,255,255,0.18)", "stroke-width": 1 }));
+    for (let s = 0; s < 12; s++) {
+      const a0 = s * 30, a1 = a0 + 30;
+      const [x0o, y0o] = pt(a0, 190), [x1o, y1o] = pt(a1, 190);
+      const [x1i, y1i] = pt(a1, 158), [x0i, y0i] = pt(a0, 158);
+      const col = ELEMENT_COLORS[s % 4];
+      // 黄経は画面上で反時計回りに進む → 外周は sweep=0、内周の戻りは sweep=1
+      const path = `M ${x0o} ${y0o} A 190 190 0 0 0 ${x1o} ${y1o} ` +
+                   `L ${x1i} ${y1i} A 158 158 0 0 1 ${x0i} ${y0i} Z`;
+      svg.appendChild(el("path", { d: path, fill: col, "fill-opacity": 0.13,
+                                   stroke: "rgba(255,255,255,0.14)", "stroke-width": 0.7 }));
+      const [gx, gy] = pt(a0 + 15, 174);
+      const g = el("text", { x: gx, y: gy, "text-anchor": "middle",
+                             "dominant-baseline": "central", "font-size": 15,
+                             fill: col }, ASTRO.SIGN_GLYPHS[s]);
+      g.appendChild(el("title", {}, ASTRO.SIGNS[s]));
+      svg.appendChild(g);
+    }
+    svg.appendChild(el("circle", { cx: 200, cy: 200, r: 108, fill: "none",
+                                   stroke: "rgba(255,255,255,0.12)", "stroke-width": 0.7 }));
+
+    for (const a of asp) {
+      if (a.angle === 0) continue;
+      const [x1, y1] = pt(pos[a.body1].longitude, 108);
+      const [x2, y2] = pt(pos[a.body2].longitude, 108);
+      const maxOrb = NATAL.ASPECT_DEFS.find((d) => d[0] === a.angle)[3];
+      const line = el("line", { x1, y1, x2, y2,
+        stroke: a.nature === "調和" ? "var(--harmony)" : "var(--tension)",
+        "stroke-width": 1.2, "stroke-opacity": (1 - 0.65 * a.orb / maxOrb).toFixed(2) });
+      if (a.nature === "緊張") line.setAttribute("stroke-dasharray", "5 4");
+      svg.appendChild(line);
+    }
+
+    const placed = ASTRO.BODIES.map((n) => ({
+      name: n, lon: pos[n].longitude, retro: pos[n].retrograde }));
+    const disp = spreadAngles(placed.map((p) => p.lon), 9);
+    placed.forEach((p, i) => { p.disp = disp[i]; });
+    for (const p of placed) {
+      const [tx1, ty1] = pt(p.lon, 158), [tx2, ty2] = pt(p.lon, 150);
+      svg.appendChild(el("line", { x1: tx1, y1: ty1, x2: tx2, y2: ty2,
+        stroke: "rgba(255,255,255,0.75)", "stroke-width": 1.4 }));
+      const [lx1, ly1] = pt(p.lon, 148), [lx2, ly2] = pt(p.disp, 138);
+      svg.appendChild(el("line", { x1: lx1, y1: ly1, x2: lx2, y2: ly2,
+        stroke: "rgba(255,255,255,0.28)", "stroke-width": 0.7 }));
+      const [gx, gy] = pt(p.disp, 126);
+      const t = el("text", { x: gx, y: gy, "text-anchor": "middle",
+        "dominant-baseline": "central", "font-size": 17, fill: "#f2f2f7" },
+        ASTRO.GLYPHS[p.name]);
+      t.appendChild(el("title", {},
+        `${p.name} ${pos[p.name].sign} ${ASTRO.fmtDeg(pos[p.name].degree)}`));
+      svg.appendChild(t);
+      if (p.retro) {
+        const [rx, ry] = pt(p.disp, 114);
+        svg.appendChild(el("text", { x: rx, y: ry, "text-anchor": "middle",
+          "dominant-baseline": "central", "font-size": 8.5, fill: "#f09a9a" }, "R"));
+      }
+    }
+    const wrap = $("wheel");
+    wrap.textContent = "";
+    wrap.appendChild(svg);
+  }
+
+  function drawBalance(bal) {
+    const wrap = $("balance");
+    wrap.textContent = "";
+    const groups = [
+      ["エレメント(四区分)", bal.el, (k) => EL_COLOR_MAP[k]],
+      ["行動様式(三区分)", bal.qu, () => "var(--gold)"],
+    ];
+    for (const [title, counts, colorOf] of groups) {
+      const h = document.createElement("p");
+      h.textContent = title;
+      h.style.cssText = "font-size:0.78rem;color:var(--ink-muted);margin-top:0.5rem";
+      wrap.appendChild(h);
+      const bars = document.createElement("div");
+      bars.className = "bars";
+      for (const [k, v] of Object.entries(counts)) {
+        const row = document.createElement("div");
+        row.className = "bar-row";
+        const label = document.createElement("span");
+        label.textContent = k;
+        const track = document.createElement("div");
+        track.className = "bar-track";
+        const fill = document.createElement("div");
+        fill.className = "bar-fill";
+        fill.style.width = `${v * 10}%`;
+        fill.style.background = colorOf(k);
+        track.appendChild(fill);
+        const num = document.createElement("span");
+        num.textContent = v;
+        num.className = "num";
+        row.append(label, track, num);
+        bars.appendChild(row);
+      }
+      wrap.appendChild(bars);
+    }
+  }
+
+  function render() {
+    const bDate = $("b-date").value;
+    if (!bDate) { $("results").hidden = true; $("placeholder").hidden = false; return; }
+    const bTime = $("b-time").value || "12:00";
+    const bDt = new Date(`${bDate}T${bTime}`);
+    if (isNaN(bDt) || bDt.getFullYear() < 1800 || bDt.getFullYear() > 2050) return;
+
+    try {
+      localStorage.setItem("natal", JSON.stringify({ d: bDate, t: $("b-time").value }));
+    } catch (e) { /* プライベートブラウズ等では保存しない */ }
+
+    const pos = ASTRO.computePositions(ASTRO.julianDay(bDt.getTime()));
+    const asp = NATAL.aspects(pos);
+    const configs = NATAL.configurations(pos, asp);
+    const bal = NATAL.balance(pos);
+    const lines = NATAL.commentary(pos, asp, configs);
+
+    drawWheel(pos, asp);
+    drawBalance(bal);
+
+    const ptb = $("positions").tBodies[0];
+    ptb.textContent = "";
+    for (const name of ASTRO.BODIES) {
+      const p = pos[name];
+      const tr = document.createElement("tr");
+      for (const [text, cls] of [
+        [ASTRO.GLYPHS[name], "glyph"], [name, ""],
+        [`${ASTRO.SIGN_GLYPHS[p.signIndex]} ${p.sign}`, ""],
+        [ASTRO.fmtDeg(p.degree), "num"],
+        [p.retrograde ? "℞" : "", "retro"],
+      ]) {
+        const td = document.createElement("td");
+        td.textContent = text;
+        if (cls) td.className = cls;
+        tr.appendChild(td);
+      }
+      ptb.appendChild(tr);
+    }
+
+    const atb = $("aspects").tBodies[0];
+    atb.textContent = "";
+    for (const a of asp) {
+      const tr = document.createElement("tr");
+      const td1 = document.createElement("td");
+      td1.textContent = `${ASTRO.GLYPHS[a.body1]} ${a.body1} × ${ASTRO.GLYPHS[a.body2]} ${a.body2}`;
+      const td2 = document.createElement("td");
+      td2.textContent = `${a.symbol} ${a.aspect}`;
+      const td3 = document.createElement("td");
+      td3.textContent = `${a.orb.toFixed(1)}°`;
+      td3.className = "num";
+      const td4 = document.createElement("td");
+      const badge = document.createElement("span");
+      badge.className = `nature ${NATURE_CLASS[a.nature]}`;
+      badge.textContent = a.nature;
+      td4.appendChild(badge);
+      tr.append(td1, td2, td3, td4);
+      atb.appendChild(tr);
+    }
+
+    const cw = $("configs");
+    cw.textContent = "";
+    if (!configs.length) {
+      const p = document.createElement("p");
+      p.textContent = "グランドトライン・Tスクエア・グランドクロス・ステリウムは見つかりませんでした。";
+      p.style.cssText = "font-size:0.86rem;color:var(--ink-2)";
+      cw.appendChild(p);
+    }
+    for (const c of configs) {
+      const div = document.createElement("div");
+      div.className = "config";
+      const nm = document.createElement("p");
+      nm.className = "name";
+      nm.textContent = c.name;
+      const mem = document.createElement("p");
+      mem.className = "members";
+      mem.textContent = c.members.map((m) => `${ASTRO.GLYPHS[m]} ${m}`).join(" ・ ");
+      const de = document.createElement("p");
+      de.className = "desc";
+      de.textContent = c.desc;
+      div.append(nm, mem, de);
+      cw.appendChild(div);
+    }
+
+    const ul = $("commentary");
+    ul.textContent = "";
+    for (const line of lines) {
+      const li = document.createElement("li");
+      li.textContent = line;
+      ul.appendChild(li);
+    }
+
+    $("placeholder").hidden = true;
+    $("results").hidden = false;
+  }
+
+  // 出生情報はトランジットページと共有(端末内保存)
+  try {
+    const saved = JSON.parse(localStorage.getItem("natal") || "null");
+    if (saved && saved.d) { $("b-date").value = saved.d; $("b-time").value = saved.t || ""; }
+  } catch (e) { /* 破損データは無視 */ }
+  for (const id of ["b-date", "b-time"])
+    $(id).addEventListener("change", render);
+  render();
+})();
+</script>
+</body>
+</html>
