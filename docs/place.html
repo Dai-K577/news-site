@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#141428">
+<title>星読み — 出生場所を加えた解析(アセンダント・ハウス)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --page-bg1: #1a1a2e;
+    --page-bg2: #16213e;
+    --surface: #141428;
+    --card: rgba(255,255,255,0.055);
+    --card-border: rgba(255,255,255,0.10);
+    --ink: #f2f2f7;
+    --ink-2: #b9b9d0;
+    --ink-muted: #8a8aa8;
+    --hairline: rgba(255,255,255,0.14);
+    --gold: #e8c56a;
+    /* エレメント色(ダークサーフェス検証済み) */
+    --el-fire:  #e66767;
+    --el-earth: #c98500;
+    --el-air:   #3987e5;
+    --el-water: #199e70;
+    --harmony: #3987e5;
+    --tension: #e66767;
+  }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: system-ui, -apple-system, 'Hiragino Kaku Gothic ProN', sans-serif;
+    background: linear-gradient(160deg, var(--page-bg1) 0%, var(--page-bg2) 100%) fixed;
+    color: var(--ink);
+    line-height: 1.7;
+    min-height: 100vh;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  header {
+    text-align: center;
+    padding: calc(1.6rem + env(safe-area-inset-top)) 1rem 0.4rem;
+  }
+  header h1 { font-size: 1.3rem; letter-spacing: 0.04em; }
+  header p { color: var(--ink-2); font-size: 0.82rem; margin-top: 0.2rem; }
+  main {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 0.8rem 0.9rem 2rem;
+    display: grid;
+    gap: 0.9rem;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 1rem 1.05rem;
+    backdrop-filter: blur(6px);
+  }
+  .card h2 {
+    font-size: 0.95rem;
+    color: var(--gold);
+    letter-spacing: 0.08em;
+    margin-bottom: 0.6rem;
+    font-weight: 600;
+  }
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+  .controls label {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--ink-muted);
+    margin-bottom: 0.15rem;
+  }
+  .controls input, .controls select {
+    width: 100%;
+    font: inherit;
+    font-size: 0.95rem;
+    color: var(--ink);
+    background: rgba(0,0,0,0.28);
+    border: 1px solid var(--hairline);
+    border-radius: 9px;
+    padding: 0.5rem 0.6rem;
+    color-scheme: dark;
+    min-height: 44px;
+  }
+  .controls .full { grid-column: 1 / -1; }
+  .hint { font-size: 0.74rem; color: var(--ink-muted); margin-top: 0.5rem; }
+  .warn { font-size: 0.8rem; color: #f0b46a; margin-top: 0.5rem; }
+  .placeholder { text-align: center; color: var(--ink-muted); font-size: 0.9rem; padding: 1.5rem 0; }
+  .wheel-wrap { display: flex; justify-content: center; }
+  svg.wheel { width: 100%; max-width: 430px; height: auto; display: block; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th {
+    text-align: left;
+    color: var(--ink-muted);
+    font-weight: 500;
+    font-size: 0.72rem;
+    padding: 0.15rem 0.3rem;
+    border-bottom: 1px solid var(--hairline);
+  }
+  td { padding: 0.34rem 0.3rem; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  tr:last-child td { border-bottom: none; }
+  .num { font-variant-numeric: tabular-nums; }
+  .glyph { font-size: 1.05rem; width: 1.6rem; }
+  .retro { color: var(--tension); font-size: 0.78rem; font-weight: 600; }
+  .angle-name { color: var(--gold); font-weight: 600; }
+  .commentary li { margin: 0.45rem 0 0.45rem 1.1rem; font-size: 0.88rem; color: var(--ink-2); }
+  .commentary li::marker { color: var(--gold); }
+  .bars { display: grid; gap: 0.35rem; margin-top: 0.3rem; }
+  .bar-row { display: grid; grid-template-columns: 6.4rem 1fr 1.4rem; align-items: center; gap: 0.5rem; font-size: 0.8rem; }
+  .bar-track { background: rgba(0,0,0,0.3); border-radius: 4px; height: 0.55rem; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; background: var(--gold); }
+  footer {
+    text-align: center; padding: 0 1rem 2.5rem;
+    font-size: 0.72rem; color: var(--ink-muted);
+  }
+  footer a { color: var(--ink-2); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🧭 星読み — 出生場所を加えた解析</h1>
+  <p>アセンダント・MC・ハウス — 生まれた場所と時刻が描く人生の見取り図</p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>出生情報</h2>
+    <div class="controls">
+      <div>
+        <label for="b-date">生年月日</label>
+        <input type="date" id="b-date" min="1800-01-01" max="2050-12-31">
+      </div>
+      <div>
+        <label for="b-time">出生時刻(必須)</label>
+        <input type="time" id="b-time">
+      </div>
+      <div class="full">
+        <label for="b-pref">出生場所</label>
+        <select id="b-pref"></select>
+      </div>
+      <div>
+        <label for="b-lat">緯度(北緯+)</label>
+        <input type="number" id="b-lat" step="0.001" min="-89.9" max="89.9">
+      </div>
+      <div>
+        <label for="b-lon">経度(東経+)</label>
+        <input type="number" id="b-lon" step="0.001" min="-180" max="180">
+      </div>
+      <div>
+        <label for="b-tz">タイムゾーン(UTCとの時差)</label>
+        <input type="number" id="b-tz" step="0.5" min="-12" max="14" value="9">
+      </div>
+      <div>
+        <label for="h-sys">ハウス方式</label>
+        <select id="h-sys">
+          <option value="whole" selected>ホールサイン</option>
+          <option value="equal">イコール(ASC起点30°)</option>
+        </select>
+      </div>
+    </div>
+    <p class="hint">アセンダントは約4分で1°動くため、出生時刻の精度が結果を左右します(母子手帳の記載がおすすめ)。都道府県を選ぶと県庁所在地の緯度経度が入ります。入力内容はこの端末のみに保存されます。</p>
+    <p class="warn" id="time-warn" hidden>出生時刻が未入力です。アセンダント・ハウスの計算には出生時刻が必要です。</p>
+  </section>
+
+  <div id="results" hidden><div style="display:contents">
+    <section class="card">
+      <h2>出生図(アセンダント基準)</h2>
+      <div class="wheel-wrap" id="wheel"></div>
+      <p class="hint">左端がアセンダント(上昇点)。円内の数字はハウス、中央の線は天体間のアスペクトです。</p>
+    </section>
+
+    <section class="card">
+      <h2>感受点(アングル)</h2>
+      <table id="angles">
+        <thead><tr><th>感受点</th><th>星座</th><th>度数</th><th>意味</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>天体のハウス配置</h2>
+      <table id="houses-table">
+        <thead><tr><th></th><th>天体</th><th>星座</th><th>ハウス</th><th>領域</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>人生の重心(半球バランス)</h2>
+      <div class="bars" id="hemis"></div>
+    </section>
+
+    <section class="card">
+      <h2>総合考察</h2>
+      <ul class="commentary" id="commentary"></ul>
+    </section>
+  </div></div>
+
+  <section class="card" id="placeholder">
+    <p class="placeholder">生年月日・出生時刻・出生場所を入力すると解析します</p>
+  </section>
+</main>
+
+<footer>
+  <p>惑星: JPL近似ケプラー軌道要素(1800–2050年) / 月: Schlyter法。恒星時はIAU 1982系の近似式。
+  出生時刻はタイムゾーン欄の時差で解釈します(日本は+9)。</p>
+  <p style="margin-top:0.4rem">
+    <a href="./astrology.html">今日の星回り →</a> &nbsp;|&nbsp;
+    <a href="./natal.html">出生図の位置関係 →</a> &nbsp;|&nbsp;
+    <a href="./transit.html">出生図×現在の空 →</a>
+  </p>
+</footer>
+
+<script>
+/* ============================================================
+   天文計算部 (scripts/astrology.py と同一ロジックのJS移植
+   + 恒星時・アセンダント・MC)
+   ============================================================ */
+const ASTRO = (() => {
+  const DEG = Math.PI / 180;
+  const mod = (a, n) => ((a % n) + n) % n;
+  const julianDay = (ms) => ms / 86400000 + 2440587.5;
+
+  // 惑星の軌道要素 (JPL近似暦: J2000黄道基準, 1800-2050年)
+  const ELEMENTS = {
+    "水星": [0.38709927,0.00000037, 0.20563593,0.00001906, 7.00497902,-0.00594749,
+             252.25032350,149472.67411175, 77.45779628,0.16047689, 48.33076593,-0.12534081],
+    "金星": [0.72333566,0.00000390, 0.00677672,-0.00004107, 3.39467605,-0.00078890,
+             181.97909950,58517.81538729, 131.60246718,0.00268329, 76.67984255,-0.27769418],
+    "地球": [1.00000261,0.00000562, 0.01671123,-0.00004392, -0.00001531,-0.01294668,
+             100.46457166,35999.37244981, 102.93768193,0.32327364, 0.0,0.0],
+    "火星": [1.52371034,0.00001847, 0.09339410,0.00007882, 1.84969142,-0.00813131,
+             -4.55343205,19140.30268499, -23.94362959,0.44441088, 49.55953891,-0.29257343],
+    "木星": [5.20288700,-0.00011607, 0.04838624,-0.00013253, 1.30439695,-0.00183714,
+             34.39644051,3034.74612775, 14.72847983,0.21252668, 100.47390909,0.20469106],
+    "土星": [9.53667594,-0.00125060, 0.05386179,-0.00050991, 2.48599187,0.00193609,
+             49.95424423,1222.49362201, 92.59887831,-0.41897216, 113.66242448,-0.28867794],
+    "天王星": [19.18916464,-0.00196176, 0.04725744,-0.00004397, 0.77263783,-0.00242939,
+             313.23810451,428.48202785, 170.95427630,0.40805281, 74.01692503,0.04240589],
+    "海王星": [30.06992276,0.00026291, 0.00859048,0.00005105, 1.77004347,0.00035372,
+             -55.12002969,218.45945325, 44.96476227,-0.32241464, 131.78422574,-0.00508664],
+    "冥王星": [39.48211675,-0.00031596, 0.24882730,0.00005170, 17.14001206,0.00004818,
+             238.92903833,145.20780515, 224.06891629,-0.04062942, 110.30393684,-0.01183482],
+  };
+
+  function solveKepler(M, e) {
+    let E = M + e * Math.sin(M);
+    for (let i = 0; i < 20; i++) {
+      const dE = (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+      E -= dE;
+      if (Math.abs(dE) < 1e-12) break;
+    }
+    return E;
+  }
+
+  function helioXYZ(name, T) {
+    const el = ELEMENTS[name];
+    const a = el[0] + el[1] * T, e = el[2] + el[3] * T;
+    const inc = (el[4] + el[5] * T) * DEG;
+    const L = el[6] + el[7] * T, varpi = el[8] + el[9] * T;
+    const Omega = (el[10] + el[11] * T) * DEG;
+    const M = mod(L - varpi, 360) * DEG;
+    const omega = varpi * DEG - Omega;
+    const E = solveKepler(M, e);
+    const xp = a * (Math.cos(E) - e);
+    const yp = a * Math.sqrt(1 - e * e) * Math.sin(E);
+    const cw = Math.cos(omega), sw = Math.sin(omega);
+    const cO = Math.cos(Omega), sO = Math.sin(Omega);
+    const ci = Math.cos(inc), si = Math.sin(inc);
+    return [
+      (cw*cO - sw*sO*ci)*xp + (-sw*cO - cw*sO*ci)*yp,
+      (cw*sO + sw*cO*ci)*xp + (-sw*sO + cw*cO*ci)*yp,
+      (sw*si)*xp + (cw*si)*yp,
+    ];
+  }
+
+  const precession = (T) => 1.396971 * T + 0.0003086 * T * T;
+
+  function planetLongitude(name, jd) {
+    const T = (jd - 2451545.0) / 36525.0;
+    const [ex, ey] = helioXYZ("地球", T);
+    let gx, gy;
+    if (name === "太陽") { gx = -ex; gy = -ey; }
+    else {
+      const [px, py] = helioXYZ(name, T);
+      gx = px - ex; gy = py - ey;
+    }
+    return mod(Math.atan2(gy, gx) / DEG + precession(T), 360);
+  }
+
+  function moonLongitude(jd) {
+    const d = jd - 2451543.5;
+    const N = 125.1228 - 0.0529538083 * d;
+    const w = 318.0634 + 0.1643573223 * d;
+    const e = 0.054900;
+    const M = 115.3654 + 13.0649929509 * d;
+    const Ms = 356.0470 + 0.9856002585 * d;
+    const ws = 282.9404 + 4.70935e-5 * d;
+    const Ls = Ms + ws;
+    const E = solveKepler(mod(M, 360) * DEG, e);
+    const xp = Math.cos(E) - e;
+    const yp = Math.sqrt(1 - e * e) * Math.sin(E);
+    const v = Math.atan2(yp, xp) / DEG;
+    let lon = mod(N + w + v, 360);
+    const Lm = mod(N + w + M, 360);
+    const D = (Lm - Ls) * DEG, F = (Lm - N) * DEG;
+    const Mr = M * DEG, Msr = Ms * DEG;
+    lon += -1.274*Math.sin(Mr - 2*D) + 0.658*Math.sin(2*D) - 0.186*Math.sin(Msr)
+         - 0.059*Math.sin(2*Mr - 2*D) - 0.057*Math.sin(Mr - 2*D + Msr)
+         + 0.053*Math.sin(Mr + 2*D) + 0.046*Math.sin(2*D - Msr)
+         + 0.041*Math.sin(Mr - Msr) - 0.035*Math.sin(D) - 0.031*Math.sin(Mr + Msr)
+         - 0.015*Math.sin(2*F - 2*D) + 0.011*Math.sin(Mr - 4*D);
+    return mod(lon, 360);
+  }
+
+  const BODIES = ["太陽","月","水星","金星","火星","木星","土星","天王星","海王星","冥王星"];
+  const GLYPHS = {"太陽":"☉","月":"☽","水星":"☿","金星":"♀","火星":"♂",
+                  "木星":"♃","土星":"♄","天王星":"♅","海王星":"♆","冥王星":"♇"};
+  const SIGNS = ["牡羊座","牡牛座","双子座","蟹座","獅子座","乙女座",
+                 "天秤座","蠍座","射手座","山羊座","水瓶座","魚座"];
+  const SIGN_GLYPHS = ["♈","♉","♊","♋","♌","♍","♎","♏","♐","♑","♒","♓"];
+  const SIGN_MEANINGS = {
+    "牡羊座":"開拓・スタート・勢い","牡牛座":"安定・所有・五感",
+    "双子座":"情報・コミュニケーション・好奇心","蟹座":"感情・家庭・共感",
+    "獅子座":"自己表現・創造・情熱","乙女座":"分析・実務・調整",
+    "天秤座":"調和・対人関係・バランス","蠍座":"深化・変容・集中",
+    "射手座":"拡大・探求・楽観","山羊座":"達成・組織・責任",
+    "水瓶座":"革新・独立・ネットワーク","魚座":"直感・共感・想像力",
+  };
+
+  const bodyLongitude = (name, jd) =>
+    name === "月" ? moonLongitude(jd) : planetLongitude(name, jd);
+  const angleDiff = (a, b) => mod(a - b + 180, 360) - 180;
+  const bodySpeed = (name, jd) =>
+    angleDiff(bodyLongitude(name, jd + 0.5), bodyLongitude(name, jd - 0.5));
+  const signIndex = (lon) => Math.floor(mod(lon, 360) / 30);
+
+  function fmtDeg(degInSign) {
+    let d = Math.floor(degInSign);
+    let m = Math.round((degInSign - d) * 60);
+    if (m === 60) { d += 1; m = 0; }
+    return `${d}°${String(m).padStart(2, "0")}′`;
+  }
+
+  function computePositions(jd) {
+    const positions = {};
+    for (const name of BODIES) {
+      const lon = bodyLongitude(name, jd);
+      const speed = bodySpeed(name, jd);
+      const si = signIndex(lon);
+      positions[name] = {
+        longitude: lon, sign: SIGNS[si], signIndex: si,
+        degree: mod(lon, 30), speed,
+        retrograde: speed < 0 && name !== "太陽" && name !== "月",
+      };
+    }
+    return positions;
+  }
+
+  // ── 恒星時・アングル ──
+  const obliquity = (jd) => {
+    const T = (jd - 2451545.0) / 36525.0;
+    return 23.439291 - 0.0130042 * T;
+  };
+
+  // グリニッジ平均恒星時[deg] (IAU 1982近似)
+  function gmst(jd) {
+    const T = (jd - 2451545.0) / 36525.0;
+    return mod(280.46061837 + 360.98564736629 * (jd - 2451545.0)
+               + 0.000387933 * T * T, 360);
+  }
+
+  // アセンダント・MC [deg] (lat: 北緯+, lonE: 東経+)
+  function angles(jd, lat, lonE) {
+    const ramc = mod(gmst(jd) + lonE, 360) * DEG;   // 地方恒星時 = MCの赤経
+    const eps = obliquity(jd) * DEG;
+    const phi = lat * DEG;
+    const mc = mod(Math.atan2(Math.sin(ramc), Math.cos(ramc) * Math.cos(eps)) / DEG, 360);
+    const asc = mod(Math.atan2(
+      Math.cos(ramc),
+      -(Math.sin(ramc) * Math.cos(eps) + Math.tan(phi) * Math.sin(eps))) / DEG, 360);
+    return { asc, mc, ramc: ramc / DEG, eps: eps / DEG };
+  }
+
+  return { julianDay, computePositions, fmtDeg, angles, gmst, obliquity,
+           BODIES, GLYPHS, SIGNS, SIGN_GLYPHS, SIGN_MEANINGS,
+           bodyLongitude, angleDiff, signIndex, mod };
+})();
+
+/* ============================================================
+   ハウス・解釈部
+   ============================================================ */
+const HOUSES = (() => {
+  const MEANINGS = {
+    1:"自分自身・外見・物事の始め方", 2:"金銭・所有・才能という資源",
+    3:"学び・言葉・身近な交流", 4:"家庭・ルーツ・心の基盤",
+    5:"恋愛・創造・楽しみ", 6:"仕事の実務・健康・日々の務め",
+    7:"パートナー・一対一の関係", 8:"継承・深い絆・変容",
+    9:"探求・専門性・遠い世界", 10:"天職・社会的な到達点",
+    11:"仲間・未来・ネットワーク", 12:"内面世界・癒し・見えない支え",
+  };
+  const BODY_ROLE = {
+    "太陽":"人生の目的","月":"感情と安心感","水星":"知性と対話",
+    "金星":"愛情と喜び","火星":"行動力","木星":"発展と幸運",
+    "土星":"課題と成熟","天王星":"変革の衝動","海王星":"夢と霊感","冥王星":"変容の力",
+  };
+
+  // ハウスカスプ12個 [deg]
+  function cusps(ascLon, system) {
+    const out = [];
+    if (system === "whole") {
+      const start = Math.floor(ascLon / 30) * 30;
+      for (let i = 0; i < 12; i++) out.push(ASTRO.mod(start + i * 30, 360));
+    } else { // equal
+      for (let i = 0; i < 12; i++) out.push(ASTRO.mod(ascLon + i * 30, 360));
+    }
+    return out;
+  }
+
+  // 天体のハウス番号(1..12)
+  function houseOf(lon, cuspArr) {
+    for (let i = 0; i < 12; i++) {
+      const a = cuspArr[i], b = cuspArr[(i + 1) % 12];
+      const span = ASTRO.mod(b - a, 360) || 360;
+      if (ASTRO.mod(lon - a, 360) < span) return i + 1;
+    }
+    return 12;
+  }
+
+  // 半球バランス
+  function hemispheres(houseNums) {
+    let lower = 0, upper = 0, east = 0, west = 0;
+    for (const h of Object.values(houseNums)) {
+      if (h >= 1 && h <= 6) lower++; else upper++;
+      if (h >= 10 || h <= 3) east++; else west++;
+    }
+    return { lower, upper, east, west };
+  }
+
+  function commentary(pos, ascSign, mcSign, houseNums, hemi, noTimePrecision) {
+    const lines = [];
+    lines.push(`アセンダントは${ascSign}: 第一印象や立ち居振る舞いに「${ASTRO.SIGN_MEANINGS[ascSign]}」の雰囲気をまとい、世界へは${ascSign}的に踏み出します。太陽星座(内面の核)との違いが「外から見えるあなた」と「本当のあなた」のギャップを説明します。`);
+    lines.push(`MC(天頂)は${mcSign}: 社会の中で目指す到達点・キャリアの方向性は「${ASTRO.SIGN_MEANINGS[mcSign]}」。この分野で評価されるほど人生の満足度が上がる配置です。`);
+
+    const sunH = houseNums["太陽"], moonH = houseNums["月"];
+    lines.push(`太陽は第${sunH}ハウス: 人生の目的は「${MEANINGS[sunH]}」の領域で輝きます。`);
+    lines.push(`月は第${moonH}ハウス: 心の充電は「${MEANINGS[moonH]}」の領域で行われます。`);
+
+    // 天体が集中しているハウス
+    const count = {};
+    for (const h of Object.values(houseNums)) count[h] = (count[h] || 0) + 1;
+    const crowded = Object.entries(count).filter(([h, c]) => c >= 3);
+    for (const [h, c] of crowded) {
+      lines.push(`第${h}ハウスに${c}天体が集中: 「${MEANINGS[h]}」があなたの人生の主要な舞台になります。`);
+    }
+
+    if (hemi.upper > hemi.lower + 2) {
+      lines.push(`天体の${hemi.upper}個が地平線の上(第7〜12ハウス)にあり、社会・他者と関わる中で力を発揮する外向型の見取り図です。`);
+    } else if (hemi.lower > hemi.upper + 2) {
+      lines.push(`天体の${hemi.lower}個が地平線の下(第1〜6ハウス)にあり、自分の内面と足元を耕すことが力の源になる見取り図です。`);
+    }
+    if (hemi.east > hemi.west + 2) {
+      lines.push(`東半球(自発の側)が優勢: 自分から仕掛けることで運が開くタイプです。`);
+    } else if (hemi.west > hemi.east + 2) {
+      lines.push(`西半球(関係の側)が優勢: 人との出会い・依頼に応えることで運が運ばれてくるタイプです。`);
+    }
+
+    if (noTimePrecision) {
+      lines.push("注意: アセンダントは約4分で1°、約2時間で星座1つ分動きます。出生時刻に幅がある場合は前後の時刻でも試してみてください。");
+    }
+    return lines;
+  }
+
+  return { MEANINGS, BODY_ROLE, cusps, houseOf, hemispheres, commentary };
+})();
+
+/* ============================================================
+   UI 描画部
+   ============================================================ */
+(() => {
+  if (typeof document === "undefined") return; // 計算部の単体テスト用ガード
+  const $ = (id) => document.getElementById(id);
+  const ELEMENT_COLORS = ["var(--el-fire)", "var(--el-earth)", "var(--el-air)", "var(--el-water)"];
+  const svgNS = "http://www.w3.org/2000/svg";
+
+  // 都道府県(県庁所在地の概略座標)
+  const PREFS = [
+    ["北海道",43.064,141.347],["青森県",40.824,140.740],["岩手県",39.704,141.153],
+    ["宮城県",38.269,140.872],["秋田県",39.719,140.102],["山形県",38.240,140.364],
+    ["福島県",37.750,140.468],["茨城県",36.342,140.447],["栃木県",36.566,139.884],
+    ["群馬県",36.391,139.061],["埼玉県",35.857,139.649],["千葉県",35.605,140.123],
+    ["東京都",35.690,139.692],["神奈川県",35.448,139.643],["新潟県",37.902,139.023],
+    ["富山県",36.695,137.211],["石川県",36.595,136.626],["福井県",36.065,136.222],
+    ["山梨県",35.664,138.568],["長野県",36.651,138.181],["岐阜県",35.391,136.722],
+    ["静岡県",34.977,138.383],["愛知県",35.180,136.907],["三重県",34.730,136.509],
+    ["滋賀県",35.005,135.869],["京都府",35.021,135.756],["大阪府",34.686,135.520],
+    ["兵庫県",34.691,135.183],["奈良県",34.685,135.833],["和歌山県",34.226,135.168],
+    ["鳥取県",35.504,134.238],["島根県",35.472,133.051],["岡山県",34.662,133.935],
+    ["広島県",34.397,132.460],["山口県",34.186,131.471],["徳島県",34.066,134.559],
+    ["香川県",34.340,134.043],["愛媛県",33.842,132.766],["高知県",33.560,133.531],
+    ["福岡県",33.607,130.418],["佐賀県",33.249,130.300],["長崎県",32.745,129.874],
+    ["熊本県",32.790,130.742],["大分県",33.238,131.613],["宮崎県",31.911,131.424],
+    ["鹿児島県",31.560,130.558],["沖縄県",26.212,127.681],
+  ];
+
+  // アスペクト定義(ホイール描画用)
+  const ASPECT_DEFS = [
+    [0, "☌", 8.0, "強調"], [60, "⚹", 5.0, "調和"], [90, "□", 7.0, "緊張"],
+    [120, "△", 7.0, "調和"], [180, "☍", 8.0, "緊張"],
+  ];
+
+  // ASCを左端(180°方向)に固定する回転付き座標
+  const mkPt = (rot) => (lonDeg, r) => {
+    const th = (180 + lonDeg - rot) * Math.PI / 180;
+    return [200 + r * Math.cos(th), 200 - r * Math.sin(th)];
+  };
+
+  function el(name, attrs, text) {
+    const e = document.createElementNS(svgNS, name);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  // グリフ表示角の決定(1次元ラベル配置)
+  function spreadAngles(lons, minSep) {
+    const n = lons.length;
+    const order = lons.map((lon, i) => ({ lon, i })).sort((a, b) => a.lon - b.lon);
+    let cut = 0, maxGap = -1;
+    for (let k = 0; k < n; k++) {
+      const gap = ASTRO.mod(order[(k + 1) % n].lon - order[k].lon, 360);
+      if (gap > maxGap) { maxGap = gap; cut = (k + 1) % n; }
+    }
+    let offset = 0, prevV = -Infinity;
+    const pts = [];
+    for (let k = 0; k < n; k++) {
+      const o = order[(cut + k) % n];
+      let v = o.lon + offset;
+      if (v < prevV) { offset += 360; v += 360; }
+      prevV = v;
+      pts.push({ i: o.i, v });
+    }
+    const clusters = [];
+    for (const p of pts) {
+      let c = { sum: p.v, items: [p.i] };
+      while (clusters.length) {
+        const prev = clusters[clusters.length - 1];
+        const prevEnd = prev.sum / prev.items.length + (prev.items.length - 1) * minSep / 2;
+        const curStart = c.sum / c.items.length - (c.items.length - 1) * minSep / 2;
+        if (curStart - prevEnd < minSep) {
+          c = { sum: prev.sum + c.sum, items: prev.items.concat(c.items) };
+          clusters.pop();
+        } else break;
+      }
+      clusters.push(c);
+    }
+    const out = new Array(n);
+    for (const c of clusters) {
+      const start = c.sum / c.items.length - (c.items.length - 1) * minSep / 2;
+      c.items.forEach((idx, k) => { out[idx] = ASTRO.mod(start + k * minSep, 360); });
+    }
+    return out;
+  }
+
+  function drawWheel(pos, ang, cuspArr) {
+    const pt = mkPt(ang.asc);
+    const svg = el("svg", { viewBox: "0 0 400 400", class: "wheel",
+                            role: "img", "aria-label": "出生図(アセンダント基準)" });
+    svg.appendChild(el("circle", { cx: 200, cy: 200, r: 196, fill: "#141428",
+                                   stroke: "rgba(255,255,255,0.18)", "stroke-width": 1 }));
+    // 星座リング(ASC基準で回転)
+    for (let s = 0; s < 12; s++) {
+      const a0 = s * 30, a1 = a0 + 30;
+      const [x0o, y0o] = pt(a0, 190), [x1o, y1o] = pt(a1, 190);
+      const [x1i, y1i] = pt(a1, 158), [x0i, y0i] = pt(a0, 158);
+      const col = ELEMENT_COLORS[s % 4];
+      // 黄経は画面上で反時計回りに進む → 外周は sweep=0、内周の戻りは sweep=1
+      const path = `M ${x0o} ${y0o} A 190 190 0 0 0 ${x1o} ${y1o} ` +
+                   `L ${x1i} ${y1i} A 158 158 0 0 1 ${x0i} ${y0i} Z`;
+      svg.appendChild(el("path", { d: path, fill: col, "fill-opacity": 0.13,
+                                   stroke: "rgba(255,255,255,0.14)", "stroke-width": 0.7 }));
+      const [gx, gy] = pt(a0 + 15, 174);
+      const g = el("text", { x: gx, y: gy, "text-anchor": "middle",
+                             "dominant-baseline": "central", "font-size": 14,
+                             fill: col }, ASTRO.SIGN_GLYPHS[s]);
+      g.appendChild(el("title", {}, ASTRO.SIGNS[s]));
+      svg.appendChild(g);
+    }
+
+    // ハウスカスプ線と番号
+    for (let i = 0; i < 12; i++) {
+      const c = cuspArr[i];
+      const [x1, y1] = pt(c, 96), [x2, y2] = pt(c, 158);
+      svg.appendChild(el("line", { x1, y1, x2, y2,
+        stroke: "rgba(255,255,255,0.22)", "stroke-width": i % 3 === 0 ? 1.3 : 0.7 }));
+      const mid = ASTRO.mod(c + (ASTRO.mod(cuspArr[(i + 1) % 12] - c, 360) || 360) / 2, 360);
+      const [nx, ny] = pt(mid, 88);
+      svg.appendChild(el("text", { x: nx, y: ny, "text-anchor": "middle",
+        "dominant-baseline": "central", "font-size": 9,
+        fill: "rgba(255,255,255,0.45)" }, String(i + 1)));
+    }
+    svg.appendChild(el("circle", { cx: 200, cy: 200, r: 96, fill: "none",
+                                   stroke: "rgba(255,255,255,0.12)", "stroke-width": 0.7 }));
+
+    // ASC・MC軸(太線)
+    const axes = [[ang.asc, "ASC"], [ang.mc, "MC"],
+                  [ASTRO.mod(ang.asc + 180, 360), "DSC"], [ASTRO.mod(ang.mc + 180, 360), "IC"]];
+    for (const [lon, label] of axes) {
+      const [x1, y1] = pt(lon, 80), [x2, y2] = pt(lon, 196);
+      svg.appendChild(el("line", { x1, y1, x2, y2,
+        stroke: "var(--gold)", "stroke-opacity": label === "ASC" || label === "MC" ? 0.8 : 0.35,
+        "stroke-width": label === "ASC" || label === "MC" ? 1.6 : 0.9 }));
+      const [lx, ly] = pt(lon, 70);
+      svg.appendChild(el("text", { x: lx, y: ly, "text-anchor": "middle",
+        "dominant-baseline": "central", "font-size": 9.5, fill: "var(--gold)" }, label));
+    }
+
+    // アスペクト線
+    const B = ASTRO.BODIES;
+    for (let i = 0; i < B.length; i++) {
+      for (let j = i + 1; j < B.length; j++) {
+        const sep = Math.abs(ASTRO.angleDiff(pos[B[i]].longitude, pos[B[j]].longitude));
+        for (const [angle, sym, orb, nature] of ASPECT_DEFS) {
+          if (Math.abs(sep - angle) <= orb) {
+            if (angle !== 0) {
+              const [x1, y1] = pt(pos[B[i]].longitude, 62);
+              const [x2, y2] = pt(pos[B[j]].longitude, 62);
+              const line = el("line", { x1, y1, x2, y2,
+                stroke: nature === "調和" ? "var(--harmony)" : "var(--tension)",
+                "stroke-width": 1.0,
+                "stroke-opacity": (1 - 0.65 * Math.abs(sep - angle) / orb).toFixed(2) });
+              if (nature === "緊張") line.setAttribute("stroke-dasharray", "4 3.5");
+              svg.appendChild(line);
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    // 天体
+    const placed = B.map((n) => ({
+      name: n, lon: pos[n].longitude, retro: pos[n].retrograde }));
+    const disp = spreadAngles(placed.map((p) => p.lon), 9);
+    placed.forEach((p, i) => { p.disp = disp[i]; });
+    for (const p of placed) {
+      const [tx1, ty1] = pt(p.lon, 158), [tx2, ty2] = pt(p.lon, 150);
+      svg.appendChild(el("line", { x1: tx1, y1: ty1, x2: tx2, y2: ty2,
+        stroke: "rgba(255,255,255,0.75)", "stroke-width": 1.4 }));
+      const [lx1, ly1] = pt(p.lon, 148), [lx2, ly2] = pt(p.disp, 138);
+      svg.appendChild(el("line", { x1: lx1, y1: ly1, x2: lx2, y2: ly2,
+        stroke: "rgba(255,255,255,0.28)", "stroke-width": 0.7 }));
+      const [gx, gy] = pt(p.disp, 126);
+      const t = el("text", { x: gx, y: gy, "text-anchor": "middle",
+        "dominant-baseline": "central", "font-size": 16, fill: "#f2f2f7" },
+        ASTRO.GLYPHS[p.name]);
+      t.appendChild(el("title", {},
+        `${p.name} ${pos[p.name].sign} ${ASTRO.fmtDeg(pos[p.name].degree)}`));
+      svg.appendChild(t);
+      if (p.retro) {
+        const [rx, ry] = pt(p.disp, 114);
+        svg.appendChild(el("text", { x: rx, y: ry, "text-anchor": "middle",
+          "dominant-baseline": "central", "font-size": 8, fill: "#f09a9a" }, "R"));
+      }
+    }
+    const wrap = $("wheel");
+    wrap.textContent = "";
+    wrap.appendChild(svg);
+  }
+
+  function render() {
+    const bDate = $("b-date").value, bTime = $("b-time").value;
+    $("time-warn").hidden = !(bDate && !bTime);
+    if (!bDate || !bTime) {
+      $("results").hidden = true; $("placeholder").hidden = false; return;
+    }
+    const lat = parseFloat($("b-lat").value), lon = parseFloat($("b-lon").value);
+    const tz = parseFloat($("b-tz").value);
+    if (!isFinite(lat) || !isFinite(lon) || !isFinite(tz)) return;
+    if (Math.abs(lat) > 66.5) return; // 極圏はアセンダントが不定になり得るため対象外
+
+    // 出生地のタイムゾーンでUTCへ変換
+    const ms = Date.parse(`${bDate}T${bTime}:00Z`) - tz * 3600000;
+    if (!isFinite(ms)) return;
+    const y = new Date(ms).getUTCFullYear();
+    if (y < 1800 || y > 2050) return;
+
+    try {
+      localStorage.setItem("natal", JSON.stringify({ d: bDate, t: bTime }));
+      localStorage.setItem("natalPlace", JSON.stringify(
+        { pref: $("b-pref").value, lat, lon, tz }));
+    } catch (e) { /* プライベートブラウズ等では保存しない */ }
+
+    const jd = ASTRO.julianDay(ms);
+    const pos = ASTRO.computePositions(jd);
+    const ang = ASTRO.angles(jd, lat, lon);
+    const system = $("h-sys").value;
+    const cuspArr = HOUSES.cusps(ang.asc, system);
+    const houseNums = {};
+    for (const b of ASTRO.BODIES)
+      houseNums[b] = HOUSES.houseOf(pos[b].longitude, cuspArr);
+    const hemi = HOUSES.hemispheres(houseNums);
+
+    drawWheel(pos, ang, cuspArr);
+
+    // アングル表
+    const angDefs = [
+      ["ASC(上昇点)", ang.asc, "第一印象・外見・世界への出方"],
+      ["MC(天頂)", ang.mc, "天職・社会的な到達点"],
+      ["DSC(下降点)", ASTRO.mod(ang.asc + 180, 360), "パートナーに求めるもの"],
+      ["IC(天底)", ASTRO.mod(ang.mc + 180, 360), "家庭・心の基盤"],
+    ];
+    const angTb = $("angles").tBodies[0];
+    angTb.textContent = "";
+    for (const [name, lonA, desc] of angDefs) {
+      const si = ASTRO.signIndex(lonA);
+      const tr = document.createElement("tr");
+      for (const [text, cls] of [
+        [name, "angle-name"],
+        [`${ASTRO.SIGN_GLYPHS[si]} ${ASTRO.SIGNS[si]}`, ""],
+        [ASTRO.fmtDeg(ASTRO.mod(lonA, 30)), "num"],
+        [desc, ""],
+      ]) {
+        const td = document.createElement("td");
+        td.textContent = text;
+        if (cls) td.className = cls;
+        tr.appendChild(td);
+      }
+      angTb.appendChild(tr);
+    }
+
+    // 天体×ハウス表
+    const htb = $("houses-table").tBodies[0];
+    htb.textContent = "";
+    for (const name of ASTRO.BODIES) {
+      const p = pos[name], h = houseNums[name];
+      const tr = document.createElement("tr");
+      for (const [text, cls] of [
+        [ASTRO.GLYPHS[name], "glyph"], [name, ""],
+        [`${ASTRO.SIGN_GLYPHS[p.signIndex]} ${p.sign} ${ASTRO.fmtDeg(p.degree)}${p.retrograde ? " ℞" : ""}`, "num"],
+        [`第${h}`, "num"],
+        [HOUSES.MEANINGS[h], ""],
+      ]) {
+        const td = document.createElement("td");
+        td.textContent = text;
+        if (cls) td.className = cls;
+        tr.appendChild(td);
+      }
+      htb.appendChild(tr);
+    }
+
+    // 半球バランス
+    const hw = $("hemis");
+    hw.textContent = "";
+    for (const [label, v] of [
+      ["上(社会・外向)", hemi.upper], ["下(内面・足元)", hemi.lower],
+      ["東(自発)", hemi.east], ["西(関係)", hemi.west],
+    ]) {
+      const row = document.createElement("div");
+      row.className = "bar-row";
+      const lb = document.createElement("span");
+      lb.textContent = label;
+      const track = document.createElement("div");
+      track.className = "bar-track";
+      const fill = document.createElement("div");
+      fill.className = "bar-fill";
+      fill.style.width = `${v * 10}%`;
+      track.appendChild(fill);
+      const num = document.createElement("span");
+      num.textContent = v;
+      num.className = "num";
+      row.append(lb, track, num);
+      hw.appendChild(row);
+    }
+
+    // 考察
+    const lines = HOUSES.commentary(
+      pos, ASTRO.SIGNS[ASTRO.signIndex(ang.asc)], ASTRO.SIGNS[ASTRO.signIndex(ang.mc)],
+      houseNums, hemi, true);
+    const ul = $("commentary");
+    ul.textContent = "";
+    for (const line of lines) {
+      const li = document.createElement("li");
+      li.textContent = line;
+      ul.appendChild(li);
+    }
+
+    $("placeholder").hidden = true;
+    $("results").hidden = false;
+  }
+
+  // 都道府県プルダウン構築
+  const sel = $("b-pref");
+  for (const [name] of PREFS) {
+    const o = document.createElement("option");
+    o.value = name; o.textContent = name;
+    sel.appendChild(o);
+  }
+  const other = document.createElement("option");
+  other.value = "other"; other.textContent = "その他(緯度経度を直接入力)";
+  sel.appendChild(other);
+  sel.addEventListener("change", () => {
+    const p = PREFS.find((x) => x[0] === sel.value);
+    if (p) { $("b-lat").value = p[1]; $("b-lon").value = p[2]; $("b-tz").value = 9; }
+    render();
+  });
+
+  // 初期値: 端末内保存の復元(出生日時はnatal/transitページと共有)
+  try {
+    const saved = JSON.parse(localStorage.getItem("natal") || "null");
+    if (saved && saved.d) { $("b-date").value = saved.d; $("b-time").value = saved.t || ""; }
+    const place = JSON.parse(localStorage.getItem("natalPlace") || "null");
+    if (place && place.pref) {
+      sel.value = place.pref;
+      $("b-lat").value = place.lat; $("b-lon").value = place.lon; $("b-tz").value = place.tz;
+    } else {
+      sel.value = "東京都"; $("b-lat").value = 35.690; $("b-lon").value = 139.692;
+    }
+  } catch (e) {
+    sel.value = "東京都"; $("b-lat").value = 35.690; $("b-lon").value = 139.692;
+  }
+  for (const id of ["b-date", "b-time", "b-lat", "b-lon", "b-tz", "h-sys"])
+    $(id).addEventListener("change", render);
+  render();
+})();
+</script>
+</body>
+</html>
