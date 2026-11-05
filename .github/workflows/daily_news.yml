@@ -36,6 +36,6 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/index.html
+          git add docs/index.html docs/archive
           git diff --cached --quiet || git commit -m "chore: update news digest $(date +'%Y-%m-%d %H:%M JST' -d '+9 hours')"
           git push
